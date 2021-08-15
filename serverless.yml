@@ -1,0 +1,122 @@
+service: cognito-mfa-email-example
+# app and org for use with dashboard.serverless.com
+#app: your-app-name
+#org: your-org-name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+frameworkVersion: '2'
+
+# plugins:
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+
+  stage:  ${self:custom.stage}
+  region: us-east-1
+
+  environment:
+    # URL: {"Fn::Join": ["", ["https://", {"Ref": "ApiGatewayRestApi"}, ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"]]}
+    USER_POOL_ID: {"Ref": "UserPool"}
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - cognito-idp:AdminGetUser
+        - cognito-idp:AdminUpdateUserAttributes
+      Resource:
+        - {"Fn::GetAtt": [UserPool, Arn]}
+    - Effect: "Allow"
+      Action:
+        - ses:SendEmail
+      Resource:
+        - "*"
+
+functions:
+  define:
+    handler: defineAuth.handler
+    events:
+      - cognitoUserPool:
+          pool: ${self:custom.userPoolName}
+          trigger: DefineAuthChallenge
+          existing: true
+  create:
+    handler: createAuth.handler
+    environment:
+      EMAIL_ADDRESS: ${ssm:/${self:provider.stage}_EMAIL_ADDRESS}
+    events:
+      - cognitoUserPool:
+          pool: ${self:custom.userPoolName}
+          trigger: CreateAuthChallenge
+          existing: true
+  verify:
+    handler: verify.handler
+    events:
+      - cognitoUserPool:
+          pool: ${self:custom.userPoolName}
+          trigger: VerifyAuthChallengeResponse
+          existing: true
+# Set up Cognito & S3
+resources:
+  Resources:
+    UserPool:
+      Type: "AWS::Cognito::UserPool"
+      Properties:
+        MfaConfiguration: OFF
+        UsernameConfiguration:
+          CaseSensitive: false
+        UserPoolName: ${self:custom.userPoolName}
+        AdminCreateUserConfig:
+          AllowAdminCreateUserOnly: false
+          UnusedAccountValidityDays: 1
+        AutoVerifiedAttributes:
+          - email
+        UsernameAttributes:
+          - email
+        Schema:
+          - Name: email
+            Mutable: true
+            Required: true
+          - Name: name
+            Mutable: true
+          - Name: authChallenge
+            AttributeDataType: String
+            Mutable: true
+          - Name: securityQuestions
+            AttributeDataType: String
+            Mutable: true
+          - Name: securityQuestion1
+            AttributeDataType: String
+            Mutable: true
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: True
+            RequireNumbers: True
+            RequireSymbols: True
+            RequireUppercase: True
+    UserPoolClient:
+      Type: "AWS::Cognito::UserPoolClient"
+      Properties:
+        ClientName: ${self:custom.userPoolClientName}
+        UserPoolId:
+          Ref: UserPool
+        ExplicitAuthFlows:
+          # - ADMIN_NO_SRP_AUTH
+            # - ALLOW_USER_SRP_AUTH
+            # - ALLOW_REFRESH_TOKEN_AUTH
+            # - ALLOW_CUSTOM_AUTH
+          - CUSTOM_AUTH_FLOW_ONLY
+        PreventUserExistenceErrors: ENABLED
+        GenerateSecret: true
+  Outputs:
+    UserPoolId:
+      Value: !Ref UserPool
+    UserPoolClientId:
+      Value: !Ref UserPoolClient
+custom:
+  name: ${opt:name, 'example'}
+  stage: ${opt:stage, 'dev'}
+  userPoolName: ${self:custom.name}-${self:custom.stage}
+  userPoolClientName: ${self:custom.name}-${self:custom.stage}
+  webBucketName: sls-authorizers-${self:custom.stage}

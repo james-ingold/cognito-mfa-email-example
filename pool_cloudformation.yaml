@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cognito Stack
+Parameters:
+  AuthName:
+    Type: String
+    Description: Unique Auth Name for Cognito Resources
+  Stage:
+    Type: String
+    Description: Unique Auth Name for Cognito Resources
+
+Resources:
+  UserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      MfaConfiguration: "OFF"
+      UsernameConfiguration:
+        CaseSensitive: false
+      UserPoolName: !Sub ${AuthName}-${Stage}
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+        UnusedAccountValidityDays: 1
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          Mutable: true
+          Required: true
+        - Name: name
+          Mutable: true
+        - Name: authChallenge
+          AttributeDataType: String
+          Mutable: true
+          NumberAttributeConstraints:
+            MinValue: 1
+            MaxValue: 6
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: True
+          RequireNumbers: True
+          RequireSymbols: True
+          RequireUppercase: True
+  UserPoolClient:
+    Type: "AWS::Cognito::UserPoolClient"
+    Properties:
+      ClientName: !Sub ${AuthName}-client
+      UserPoolId:
+        Ref: UserPool
+      ExplicitAuthFlows:
+        - CUSTOM_AUTH_FLOW_ONLY
+      PreventUserExistenceErrors: ENABLED
+      GenerateSecret: true
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient

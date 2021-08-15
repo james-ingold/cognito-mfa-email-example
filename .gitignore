@@ -1,0 +1,15 @@
+# package directories
+node_modules
+jspm_packages
+
+# Serverless directories
+.serverless
+.secrets-dev-yml
+.secret-dev-yml.encrypted
+secrets.dev.yml.encrypted
+secrets.prod.yml
+secrets.dev.yml
+secrets.dev.yml.encrypted
+/tags
+
+.env
